@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>THE REGIME: ULTRA PRO MAX</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Stalinist+One&display=swap');
+        :root { --red: #ff0000; --gold: #ffd700; --bg: #000; --panel: #111; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); color: #fff; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; }
+
+        /* --- INTRO SEQUENCE --- */
+        #intro-screen { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #moving-car { font-size: 50px; position: absolute; bottom: 20%; left: -100px; }
+        #intro-text { font-family: 'Stalinist One', cursive; font-size: 2rem; color: var(--red); opacity: 0; text-align: center; }
+
+        /* --- LAYERS --- */
+        .layer { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; background: rgba(0,0,0,0.9); transition: 0.4s; }
+        .hidden { display: none !important; }
+        .pop-card { background: var(--panel); border: 2px solid var(--red); width: 92%; max-width: 400px; padding: 25px; border-radius: 20px; box-shadow: 0 0 40px rgba(255,0,0,0.2); max-height: 85vh; overflow-y: auto; }
+
+        /* --- UI ELEMENTS --- */
+        h1, h2 { font-family: 'Stalinist One', cursive; color: var(--red); text-align: center; margin-bottom: 20px; }
+        .btn { background: var(--red); color: #fff; border: none; padding: 15px; margin: 10px 0; width: 100%; font-weight: bold; cursor: pointer; border-radius: 10px; font-size: 1rem; transition: 0.2s; border-bottom: 4px solid #600; }
+        .btn:active { transform: translateY(2px); border-bottom-width: 2px; }
+        input { width: 100%; padding: 15px; background: #222; border: 1px solid #444; color: #fff; border-radius: 10px; margin-bottom: 15px; }
+
+        /* --- SWIPE TOGGLE --- */
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; inset: 0; background-color: #333; transition: .4s; border-radius: 34px; border: 1px solid var(--red); }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--red); }
+        input:checked + .slider:before { transform: translateX(26px); }
+
+        /* --- ICON GRID --- */
+        #icon-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; height: 180px; overflow-y: auto; padding: 10px; background: #000; border-radius: 10px; margin-bottom: 15px; border: 1px solid #333; }
+        .icon-box { font-size: 28px; text-align: center; padding: 10px; cursor: pointer; border: 2px solid transparent; border-radius: 10px; }
+        .icon-box.selected { border-color: var(--gold); background: #222; }
+
+        /* --- GAME ELEMENTS --- */
+        #game-view { display: flex; flex-direction: column; height: 100vh; }
+        #viewport { flex: 1; position: relative; overflow: hidden; background: radial-gradient(circle, #111, #000); touch-action: none; }
+        #map-container { position: absolute; width: 850px; height: 1100px; transform-origin: 0 0; }
+        .cell { position: absolute; width: 80px; height: 80px; border: 1px solid #222; display: flex; align-items: center; justify-content: center; background: rgba(10,10,10,0.8); border-radius: 8px; font-weight: bold; color: #333; }
+        .cell.trap { border-color: #f00; color: #f00; box-shadow: inset 0 0 10px #f00; }
+        .pawn { position: absolute; width: 55px; height: 55px; border-radius: 12px; z-index: 100; display: flex; align-items: center; justify-content: center; font-size: 30px; border: 3px solid #fff; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+
+        /* --- BOTTOM UI --- */
+        #bottom-ui { background: var(--panel); border-top: 3px solid var(--red); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; height: 110px; position: relative; z-index: 2000; }
+        #dice-container { width: 70px; height: 70px; background: #fff; border-radius: 15px; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(255,215,0,0.4); border: 4px solid var(--gold); }
+        #dice-val { font-size: 2.5rem; color: #000; font-weight: 900; }
+        #timer-line { position: absolute; top: -4px; left: 0; height: 4px; background: var(--gold); width: 0%; }
+    </style>
+</head>
+<body>
+
+    <div id="intro-screen">
+        <div id="intro-text">THE REGIME<br><span style="font-size: 0.8rem; color: #888;">SUPREME EDITION</span></div>
+        <div id="moving-car">🚛💨</div>
+    </div>
+
+    <div id="main-menu" class="layer hidden">
+        <h1>THE REGIME</h1>
+        <input type="text" id="user-name" placeholder="IDENTIFY YOURSELF (NAME)">
+        <button class="btn" onclick="toggleLayer('lobby-pop', true)">MULTIPLAYER LOBBY</button>
+        <button class="btn" onclick="toggleLayer('profile-pop', true)">SETTINGS & ICONS</button>
+        <button class="btn" onclick="toggleLayer('about-pop', true)">ABOUT MINISTRY</button>
+    </div>
+
+    <div id="about-pop" class="layer hidden">
+        <div class="pop-card">
+            <h2>ABOUT</h2>
+            <div style="text-align:center; margin-bottom:15px;">
+                <div style="width:100%; height:120px; background:#222; border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--red);">[IMAGE: MINISTRY LOGO]</div>
+            </div>
+            <div style="height:150px; overflow-y:auto; padding-right:10px; font-size:0.9rem; line-height:1.6; color:#ccc;">
+                Welcome Comrade. This is the official game of The Regime. 
+                Move through 100 sectors of peril. Avoid <b>Nuclear Leaks</b> and <b>Army Ambushes</b>.
+                Green zones provide <b>Air Support</b> to move you forward. 
+                Touch any trap on the board to inspect its threat level. 
+                Victory is the only option.
+            </div>
+            <button class="btn" onclick="toggleLayer('about-pop', false)">CLOSE</button>
+        </div>
+    </div>
+
+    <div id="profile-pop" class="layer hidden">
+        <div class="pop-card">
+            <h2>SETTINGS</h2>
+            <label style="color:var(--gold); font-size:0.8rem;">SELECT AVATAR (60 OPTIONS):</label>
+            <div id="icon-grid"></div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin:15px 0;">
+                <span>SOUND EFFECTS</span>
+                <label class="switch">
+                    <input type="checkbox" id="sound-swipe" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <button class="btn" onclick="toggleLayer('profile-pop', false)">SAVE CHANGES</button>
+        </div>
+    </div>
+
+    <div id="lobby-pop" class="layer hidden">
+        <div class="pop-card">
+            <h2>LOBBY</h2>
+            <button class="btn" onclick="hostGame()">HOST NEW ROOM</button>
+            <div style="margin:10px 0; border-top:1px solid #333; padding-top:10px;">
+                <input type="text" id="join-id" placeholder="ENTER ROOM ID">
+                <button class="btn" style="background:var(--gold); color:#000;" onclick="joinGame()">JOIN ROOM</button>
+            </div>
+            <p id="room-id-display" style="text-align:center; color:var(--gold); font-weight:bold;"></p>
+            <button class="btn" style="background:#444;" onclick="toggleLayer('lobby-pop', false)">BACK</button>
+        </div>
+    </div>
+
+    <div id="game-view" class="hidden">
+        <div id="viewport"><div id="map-container"></div></div>
+        <div id="bottom-ui">
+            <div id="timer-line"></div>
+            <div>
+                <div id="p-name-display" style="color:var(--gold); font-weight:bold; font-size:1.1rem;">PLAYER</div>
+                <div id="p-status" style="font-size:0.7rem; color:#888;">WAITING...</div>
+            </div>
+            <div id="dice-container" onclick="handleDiceRoll()">
+                <div id="dice-val">🎲</div>
+            </div>
+            <div onclick="toggleLayer('pause-pop', true)" style="font-size:30px; color:var(--gold); cursor:pointer;">⋮</div>
+        </div>
+    </div>
+
+    <div id="pause-pop" class="layer hidden">
+        <div class="pop-card">
+            <h2>PAUSED</h2>
+            <button class="btn" onclick="toggleLayer('profile-pop', true); toggleLayer('pause-pop', false);">SETTINGS</button>
+            <button class="btn" onclick="toggleLayer('about-pop', true); toggleLayer('pause-pop', false);">ABOUT</button>
+            <button class="btn" style="background:var(--gold); color:#000;" onclick="location.reload()">EXIT GAME</button>
+            <button class="btn" style="background:#444;" onclick="toggleLayer('pause-pop', false)">CANCEL</button>
+        </div>
+    </div>
+
+    <div id="trap-pop" class="layer hidden" style="z-index: 5000;">
+        <div class="pop-card" id="trap-card">
+            <h2 id="tr-title">TRAP DETECTED</h2>
+            <p id="tr-desc" style="text-align:center; margin:15px 0; font-size:0.9rem;"></p>
+            <div id="tr-move" style="text-align:center; font-size:1.4rem; font-weight:bold; color:var(--gold); margin-bottom:15px;"></div>
+            <button class="btn" onclick="toggleLayer('trap-pop', false)">UNDERSTOOD</button>
+        </div>
+    </div>
+
+    <script>
+        // --- FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBLyf_dz6xPC9wdthZSVtpatkc8JgFhE4Q",
+            authDomain: "chatbox-chats.firebaseapp.com",
+            projectId: "chatbox-chats",
+            databaseURL: "https://chatbox-chats-default-rtdb.firebaseio.com",
+            appId: "1:10200860576:web:262315d86f6d1732ddc6c5"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // --- CONSTANTS ---
+        const allIcons = ["🎖️","💀","⚔️","🔥","🛡️","⭐","🚩","🏭","🚜","⚒️","🔫","💣","🚁","🚂","🧱","📣","🚬","🪖","⛓️","🦅","🛸","🚀","🌋","🌪️","🧟","👺","👹","👽","🤖","💂","🕵️","👮","🧛","🧙","🥷","🦁","🐅","🐉","🦂","⚡","☄️","🍄","🩸","🧿","🗝️","💎","💰","🧨","🧤","🧥","🧢","🕶️","📡","🔭","🧬","🧪","💉","🩺","📡","🔋"];
+        const traps = [
+            { n: "ARMY ATTACK", d: "Ambushed by Regime soldiers!", m: "-8 BACK", v: -8, type: "army" },
+            { n: "BOMB BLAST", d: "Hidden landmine detonated!", m: "-12 BACK", v: -12, type: "bomb" },
+            { n: "NUCLEAR LEAK", d: "Radiation poisoning!", m: "TO START", v: -99, type: "nuke" },
+            { n: "AIR SUPPORT", d: "Regime supply drop!", m: "+10 FORWARD", v: 10, type: "good" }
+        ];
+
+        let user = { name: "", icon: "🎖️", role: "", room: "" };
+        let state = { p1Pos: 0, p2Pos: 0, turn: "host", lastRoll: 0 };
+        let cellData = [];
+
+        // --- INTRO & INIT ---
+        window.onload = () => {
+            const tl = gsap.timeline();
+            tl.to("#moving-car", { x: window.innerWidth + 200, duration: 4, ease: "none" });
+            tl.to("#intro-text", { opacity: 1, duration: 1 }, "-=3");
+            tl.to("#intro-screen", { opacity: 0, duration: 1, delay: 0.5, onComplete: () => {
+                document.getElementById('intro-screen').remove();
+                document.getElementById('main-menu').classList.remove('hidden');
+            }});
+
+            const grid = document.getElementById('icon-grid');
+            allIcons.forEach(ic => {
+                const div = document.createElement('div');
+                div.className = 'icon-box';
+                div.innerHTML = ic;
+                div.onclick = () => {
+                    document.querySelectorAll('.icon-box').forEach(b => b.classList.remove('selected'));
+                    div.classList.add('selected');
+                    user.icon = ic;
+                };
+                grid.appendChild(div);
+            });
+        };
+
+        function toggleLayer(id, show) { document.getElementById(id).classList.toggle('hidden', !show); }
+
+        // --- MULTIPLAYER ---
+        function hostGame() {
+            user.name = document.getElementById('user-name').value || "Host";
+            user.room = Math.floor(1000 + Math.random() * 9000).toString();
+            user.role = "host";
+            document.getElementById('room-id-display').innerText = "ROOM ID: " + user.room;
+            db.ref('rooms/' + user.room).set({
+                hostName: user.name, hostIcon: user.icon,
+                p1Pos: 0, p2Pos: 0, turn: "host", status: "waiting"
+            });
+            listenToRoom();
+        }
+
+        function joinGame() {
+            user.name = document.getElementById('user-name').value || "Guest";
+            user.room = document.getElementById('join-id').value;
+            user.role = "guest";
+            db.ref('rooms/' + user.room).update({
+                guestName: user.name, guestIcon: user.icon, status: "playing"
+            }).then(listenToRoom);
+        }
+
+        function listenToRoom() {
+            db.ref('rooms/' + user.room).on('value', snap => {
+                const data = snap.val();
+                if (!data) return;
+                state = data;
+                if (data.status === "playing") {
+                    if (document.getElementById('game-view').classList.contains('hidden')) initBoard();
+                    syncGame();
+                }
+            });
+        }
+
+        function initBoard() {
+            toggleLayer('main-menu', false);
+            toggleLayer('lobby-pop', false);
+            document.getElementById('game-view').classList.remove('hidden');
+            const container = document.getElementById('map-container');
+            container.innerHTML = ""; cellData = [];
+            
+            let x=0, y=0, dir=1;
+            for(let i=0; i<100; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                let t = (i > 5 && i < 95 && Math.random() < 0.15) ? traps[Math.floor(Math.random()*traps.length)] : null;
+                if(t) cell.classList.add('trap');
+                cell.innerHTML = t ? "⚠️" : i;
+                cell.style.left = (x * 85) + 'px'; cell.style.top = (y * 85) + 'px';
+                cell.onpointerdown = () => { if(t) showTrapPop(t); };
+                container.appendChild(cell);
+                cellData.push({ x: x*85, y: y*85, trap: t });
+                x += dir; if(x > 9 || x < 0) { x -= dir; y++; dir *= -1; }
+            }
+            const p1 = document.createElement('div'); p1.id='p1'; p1.className='pawn'; p1.style.background="red";
+            const p2 = document.createElement('div'); p2.id='p2'; p2.className='pawn'; p2.style.background="#444";
+            container.appendChild(p1); container.appendChild(p2);
+        }
+
+        function syncGame() {
+            document.getElementById('p-name-display').innerText = user.role === "host" ? state.hostName : state.guestName;
+            document.getElementById('p-status').innerText = state.turn === user.role ? "YOUR TURN" : "WAITING...";
+            document.getElementById('dice-val').innerText = state.lastRoll || "🎲";
+            document.getElementById('p1').innerHTML = state.hostIcon;
+            document.getElementById('p2').innerHTML = state.guestIcon;
+
+            gsap.to('#p1', { x: cellData[state.p1Pos].x + 5, y: cellData[state.p1Pos].y + 5, duration: 0.6, ease: "back.out(1.2)" });
+            gsap.to('#p2', { x: cellData[state.p2Pos].x + 15, y: cellData[state.p2Pos].y + 15, duration: 0.6, ease: "back.out(1.2)" });
+            
+            autoFocus();
+        }
+
+        function handleDiceRoll() {
+            if (state.turn !== user.role) return;
+            let roll = Math.floor(Math.random() * 6) + 1;
+            gsap.to("#dice-container", { rotation: 360, scale: 1.2, duration: 0.4, yoyo: true, repeat: 1 });
+            
+            let pKey = user.role === "host" ? "p1Pos" : "p2Pos";
+            let newPos = Math.min(99, state[pKey] + roll);
+            
+            let trap = cellData[newPos].trap;
+            if(trap) {
+                newPos = trap.v === -99 ? 0 : Math.max(0, newPos + trap.v);
+                setTimeout(() => showTrapPop(trap), 600);
+            }
+
+            db.ref('rooms/' + user.room).update({
+                [pKey]: newPos, lastRoll: roll, turn: user.role === "host" ? "guest" : "host"
+            });
+        }
+
+        function showTrapPop(t) {
+            document.getElementById('tr-title').innerText = t.n;
+            document.getElementById('tr-desc').innerText = t.d;
+            document.getElementById('tr-move').innerText = t.m;
+            document.getElementById('tr-move').style.color = t.v < 0 ? "#f00" : "#0f0";
+            toggleLayer('trap-pop', true);
+        }
+
+        function autoFocus() {
+            const pos = user.role === "host" ? state.p1Pos : state.p2Pos;
+            const coord = cellData[pos];
+            const sc = 0.9;
+            const tx = (window.innerWidth/2) - (coord.x * sc) - (40*sc);
+            const ty = (window.innerHeight/2) - (coord.y * sc) - (40*sc);
+            gsap.to("#map-container", { x: tx, y: ty, scale: sc, duration: 0.7, ease: "power2.inOut" });
+        }
+    </script>
+</body>
+</html>
